@@ -1,0 +1,7 @@
+NAME = "xwallpaper-gui"
+VERSION = "public preview"
+DESCRIPTION = "GUI frontend for xwallpaper — wallpaper manager for multi-monitor X11 setups."
+AUTHOR = "Pawel Jelonek"
+URL = "https://github.com/paweljelonek/xwallpaper-gui"
+XWALLPAPER_URL = "https://github.com/stoeckmann/xwallpaper"
+LICENSE = "ISC"
