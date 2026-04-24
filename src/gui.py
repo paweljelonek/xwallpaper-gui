@@ -364,25 +364,86 @@ class AppWindow(Gtk.ApplicationWindow):
     # ------------------------------------------------------------------
 
     def _show_about(self):
-        dialog = Gtk.AboutDialog(transient_for=self, modal=True)
-        dialog.set_program_name(info.NAME)
-        dialog.set_version(info.VERSION)
-        dialog.set_comments(info.DESCRIPTION)
-        dialog.set_copyright(f"© 2026 {info.AUTHOR}")
-        dialog.set_license_type(Gtk.License.CUSTOM)
-        dialog.set_license(info.LICENSE_TEXT)
-        dialog.set_website(info.URL)
-        dialog.set_website_label(info.URL)
+        dialog = Gtk.Dialog(title="About", transient_for=self, modal=True)
+        dialog.set_default_size(500, -1)
+        dialog.set_border_width(10)
+        
+        vbox = dialog.get_content_area()
+        vbox.set_spacing(10)
 
+        # Logo
         icon_path = os.path.join(os.path.dirname(__file__), "assets", "icon.png")
         if os.path.exists(icon_path):
             try:
                 pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(icon_path, 64, 64, True)
-                dialog.set_logo(pb)
+                img = Gtk.Image.new_from_pixbuf(pb)
+                vbox.pack_start(img, False, False, 10)
             except Exception:
                 pass
 
-        dialog.run()
+        # Tytuł
+        title_label = Gtk.Label()
+        title_label.set_markup(f"<span font='16' weight='bold'>{info.NAME}</span>\n<span font='10'>{info.VERSION}</span>")
+        title_label.set_justify(Gtk.Justification.CENTER)
+        vbox.pack_start(title_label, False, False, 0)
+        
+        # Copyright
+        copyright_label = Gtk.Label(label=f"© 2026 {info.AUTHOR}")
+        vbox.pack_start(copyright_label, False, False, 0)
+
+        # Treść główna (wyśrodkowana)
+        markup = (
+            f"A modern, lightweight graphical user interface designed for seamlessly "
+            f"managing wallpapers across multiple displays in X11 desktop environments. "
+            f"It provides a user-friendly way to configure individual screens, scaling modes, "
+            f"and autostart behaviors. The application runs smoothly in the background with a "
+            f"dedicated system tray icon, ensuring quick access and minimal resource usage.\n\n"
+            f"<a href='{info.URL}'>{info.URL}</a>\n\n"
+            f"────────────────────────────────────────\n\n"
+            f"This application serves as a frontend overlay for the excellent command-line tool 'xwallpaper'.\n"
+            f"Without this core backend, this GUI would not be possible.\n"
+            f"<a href='{info.XWALLPAPER_URL}'>{info.XWALLPAPER_URL}</a>"
+        )
+        
+        custom_label = Gtk.Label()
+        custom_label.set_markup(markup)
+        custom_label.set_justify(Gtk.Justification.CENTER)
+        custom_label.set_line_wrap(True)
+        custom_label.set_max_width_chars(65)
+        vbox.pack_start(custom_label, False, False, 10)
+        
+        # Przyciski
+        dialog.add_button("License", 1)
+        dialog.add_button("Close", Gtk.ResponseType.CLOSE)
+
+        vbox.show_all()
+        
+        while True:
+            response = dialog.run()
+            if response == 1:
+                # Pokazanie licencji w czystym okienku z suwakiem (bez dziwnego wysuwania GTK)
+                lic_dialog = Gtk.Dialog(title="MIT License", transient_for=dialog, modal=True)
+                lic_dialog.set_default_size(550, 450)
+                
+                lic_scroll = Gtk.ScrolledWindow()
+                lic_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+                
+                lic_label = Gtk.Label(label=info.LICENSE_TEXT)
+                lic_label.set_margin_start(15)
+                lic_label.set_margin_end(15)
+                lic_label.set_margin_top(15)
+                lic_label.set_margin_bottom(15)
+                lic_label.set_xalign(0.0)
+                
+                lic_scroll.add(lic_label)
+                lic_dialog.get_content_area().pack_start(lic_scroll, True, True, 0)
+                lic_dialog.add_button("Close", Gtk.ResponseType.CLOSE)
+                lic_dialog.show_all()
+                lic_dialog.run()
+                lic_dialog.destroy()
+            else:
+                break
+                
         dialog.destroy()
 
     # ------------------------------------------------------------------

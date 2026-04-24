@@ -2,7 +2,16 @@ import os
 
 NAME = "xwallpaper-gui"
 VERSION = "public preview"
-DESCRIPTION = "GUI frontend for xwallpaper — wallpaper manager for multi-monitor X11 setups."
+DESCRIPTION = (
+    "A modern, lightweight graphical user interface designed for seamlessly "
+    "managing wallpapers across multiple displays in X11 desktop environments.\n"
+    "It provides a user-friendly way to configure individual screens, scaling modes, "
+    "and autostart behaviors.\n\n"
+    "────────────────────────────────────────────────────────\n\n"
+    "This application serves as a frontend overlay for the fantastic command-line "
+    "utility 'xwallpaper' developed by Tobias Stoeckmann. Without the core backend, "
+    "this GUI would not be possible."
+)
 AUTHOR = "Pawel Jelonek"
 URL = "https://github.com/paweljelonek/xwallpaper-gui"
 XWALLPAPER_URL = "https://github.com/stoeckmann/xwallpaper"
