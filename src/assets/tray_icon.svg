@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <!-- Screen background gradient (sunset) -->
+    <linearGradient id="skyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FF512F" />
+      <stop offset="100%" stop-color="#DD2476" />
+    </linearGradient>
+    
+    <!-- Monitor frame gradient -->
+    <linearGradient id="frameGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4B5563" />
+      <stop offset="100%" stop-color="#1F2937" />
+    </linearGradient>
+
+    <!-- Mountain gradients -->
+    <linearGradient id="mountGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8B5CF6" />
+      <stop offset="100%" stop-color="#4C1D95" />
+    </linearGradient>
+    
+    <linearGradient id="mountGrad2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#C084FC" />
+      <stop offset="100%" stop-color="#6D28D9" />
+    </linearGradient>
+    
+    <!-- Sun glow -->
+    <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FDE047" stop-opacity="1" />
+      <stop offset="70%" stop-color="#F59E0B" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#D97706" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <!-- Monitor Stand Base -->
+  <path d="M 28 50 L 36 50 L 38 60 L 26 60 Z" fill="#374151" />
+  <rect x="22" y="60" width="20" height="2" rx="1" fill="#111827" />
+
+  <!-- Monitor Frame -->
+  <rect x="2" y="6" width="60" height="44" rx="4" fill="url(#frameGrad)" />
+  
+  <!-- Screen Area -->
+  <rect x="5" y="9" width="54" height="36" rx="1" fill="url(#skyGrad)" />
+  
+  <!-- Sun and Glow -->
+  <circle cx="20" cy="26" r="9" fill="url(#sunGlow)" />
+  <circle cx="20" cy="26" r="5" fill="#FEF08A" />
+
+  <!-- Back Mountain -->
+  <path d="M 5 45 L 24 23 L 45 45 Z" fill="url(#mountGrad1)" />
+  
+  <!-- Front Mountain -->
+  <path d="M 20 45 L 40 18 L 59 45 Z" fill="url(#mountGrad2)" />
+  
+  <!-- Inner Shadow for Screen Depth -->
+  <rect x="5" y="9" width="54" height="36" rx="1" fill="none" stroke="#000000" stroke-opacity="0.3" stroke-width="1.5" />
+  
+  <!-- Power LED -->
+  <circle cx="56" cy="47.5" r="1.2" fill="#34D399" />
+</svg>

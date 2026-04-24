@@ -3,10 +3,12 @@ import sys
 import json
 import socket
 import threading
-import tkinter as tk
-from tkinter import filedialog, ttk
 import webbrowser
-from PIL import Image, ImageTk
+
+import gi
+gi.require_version('Gtk', '3.0')
+gi.require_version('GdkPixbuf', '2.0')
+from gi.repository import Gtk, GLib, GdkPixbuf
 
 import xrandr
 import info
@@ -14,16 +16,23 @@ import info
 CONFIG_PATH = os.path.expanduser("~/.config/xwallpaper-gui/config.json")
 AUTOSTART_DIR = os.path.expanduser("~/.config/autostart")
 DESKTOP_FILE = os.path.join(AUTOSTART_DIR, "xwallpaper-gui.desktop")
+SOCKET_PATH = os.path.expanduser("~/.config/xwallpaper-gui/app.sock")
+
 
 def is_autostart_enabled():
     return os.path.exists(DESKTOP_FILE)
+
 
 def toggle_autostart(enable):
     if enable:
         os.makedirs(AUTOSTART_DIR, exist_ok=True)
         main_py = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "main.py"))
         exec_cmd = f"{sys.executable} {main_py} --startup"
-        content = f"[Desktop Entry]\nType=Application\nName=xwallpaper gui\nComment=Wallpaper Manager\nExec={exec_cmd}\nTerminal=false\nHidden=false\nNoDisplay=false\nX-GNOME-Autostart-enabled=true\n"
+        content = (
+            "[Desktop Entry]\nType=Application\nName=xwallpaper gui\n"
+            "Comment=Wallpaper Manager\nExec={}\nTerminal=false\n"
+            "Hidden=false\nNoDisplay=false\nX-GNOME-Autostart-enabled=true\n"
+        ).format(exec_cmd)
         with open(DESKTOP_FILE, "w", encoding="utf-8") as f:
             f.write(content)
         os.chmod(DESKTOP_FILE, 0o755)
@@ -31,7 +40,6 @@ def toggle_autostart(enable):
         if os.path.exists(DESKTOP_FILE):
             os.remove(DESKTOP_FILE)
 
-SOCKET_PATH = os.path.expanduser("~/.config/xwallpaper-gui/app.sock")
 
 def ensure_single_instance():
     os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
@@ -57,8 +65,8 @@ def ensure_single_instance():
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     server.bind(SOCKET_PATH)
     server.listen(1)
-
     return server
+
 
 def setup_ipc_server(server, app):
     def listen():
@@ -67,20 +75,20 @@ def setup_ipc_server(server, app):
                 conn, _ = server.accept()
                 data = conn.recv(1024)
                 if data == b"show":
-                    app.after(0, app.show_window)
+                    GLib.idle_add(app.show_window)
                 conn.close()
             except Exception:
                 pass
-    t = threading.Thread(target=listen, daemon=True)
-    t.start()
 
-class AppWindow(tk.Tk):
-    def __init__(self):
-        super().__init__()
-        self.title(f"xwallpaper gui ({info.VERSION})")
-        self.geometry("950x700")
-        self.protocol("WM_DELETE_WINDOW", self.hide_window)
-        
+    threading.Thread(target=listen, daemon=True).start()
+
+
+class AppWindow(Gtk.ApplicationWindow):
+    def __init__(self, gtk_app):
+        super().__init__(application=gtk_app, title=f"xwallpaper gui ({info.VERSION})")
+        self.set_default_size(950, 700)
+        self.connect("delete-event", self._on_delete)
+
         self.saved_config = {}
         if os.path.exists(CONFIG_PATH):
             try:
@@ -88,41 +96,104 @@ class AppWindow(tk.Tk):
                     self.saved_config = json.load(f)
             except Exception:
                 pass
-                
+
         self.last_directory = self.saved_config.get("_last_directory", os.path.expanduser("~"))
 
+        # Window icon
         icon_path = os.path.join(os.path.dirname(__file__), "assets", "icon.png")
         if os.path.exists(icon_path):
-            self.icon_image = ImageTk.PhotoImage(Image.open(icon_path))
-            self.wm_iconphoto(True, self.icon_image)
+            try:
+                # Menedżery okien często odrzucają duże obrazki (600x600).
+                # Skalujemy bezpiecznie do 128x128 przez GdkPixbuf.
+                pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(icon_path, 128, 128, True)
+                self.set_icon(pb)
+                Gtk.Window.set_default_icon_list([pb])
+            except Exception as e:
+                print(f"Failed to load window icon: {e}")
 
         self.monitor_rows = {}
-        self.autostart_var = tk.BooleanVar(value=is_autostart_enabled())
-        
         self._setup_ui()
         self._load_monitors()
+        self.show_all()
+
+    # ------------------------------------------------------------------
+    # UI setup
+    # ------------------------------------------------------------------
 
     def _setup_ui(self):
-        menu_bar = tk.Menu(self)
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.add(vbox)
 
-        file_menu = tk.Menu(menu_bar, tearoff=0)
-        file_menu.add_command(label="Close Application", command=self.quit_app)
-        menu_bar.add_cascade(label="File", menu=file_menu)
+        # ---- Menu bar ----
+        menubar = Gtk.MenuBar()
 
-        prefs_menu = tk.Menu(menu_bar, tearoff=0)
-        prefs_menu.add_checkbutton(label="Run on System Startup", variable=self.autostart_var, command=lambda: toggle_autostart(self.autostart_var.get()))
-        menu_bar.add_cascade(label="Preferences", menu=prefs_menu)
+        file_item = Gtk.MenuItem(label="File")
+        file_menu = Gtk.Menu()
+        quit_item = Gtk.MenuItem(label="Close Application")
+        quit_item.connect("activate", lambda w: self.quit_app())
+        file_menu.append(quit_item)
+        file_item.set_submenu(file_menu)
+        menubar.append(file_item)
 
-        help_menu = tk.Menu(menu_bar, tearoff=0)
-        help_menu.add_command(label="About", command=self._show_about)
-        menu_bar.add_cascade(label="Help", menu=help_menu)
-        self.config(menu=menu_bar)
+        prefs_item = Gtk.MenuItem(label="Preferences")
+        prefs_menu = Gtk.Menu()
+        self._autostart_item = Gtk.CheckMenuItem(label="Run on System Startup")
+        self._autostart_item.set_active(is_autostart_enabled())
+        self._autostart_item.connect("toggled", lambda w: toggle_autostart(w.get_active()))
+        prefs_menu.append(self._autostart_item)
+        prefs_item.set_submenu(prefs_menu)
+        menubar.append(prefs_item)
 
-        tk.Label(self, text="Wallpaper Configuration", font=("Helvetica", 16, "bold")).pack(pady=10)
-        self.monitors_frame = tk.Frame(self)
-        self.monitors_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        help_item = Gtk.MenuItem(label="Help")
+        help_menu = Gtk.Menu()
+        about_item = Gtk.MenuItem(label="About")
+        about_item.connect("activate", lambda w: self._show_about())
+        help_menu.append(about_item)
+        help_item.set_submenu(help_menu)
+        menubar.append(help_item)
 
-        tk.Button(self, text="Apply", command=self._apply_wallpapers, font=("Helvetica", 12)).pack(pady=10)
+        vbox.pack_start(menubar, False, False, 0)
+
+        # ---- Title ----
+        title_label = Gtk.Label()
+        title_label.set_markup("<span font='16' weight='bold'>Wallpaper Configuration</span>")
+        title_label.set_margin_top(10)
+        title_label.set_margin_bottom(6)
+        vbox.pack_start(title_label, False, False, 0)
+
+        # ---- Scrollable monitor area ----
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_margin_start(10)
+        scroll.set_margin_end(10)
+        scroll.set_margin_bottom(6)
+
+        self.monitors_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        scroll.add(self.monitors_box)
+        vbox.pack_start(scroll, True, True, 0)
+
+        # ---- Action buttons ----
+        action_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        action_box.set_halign(Gtk.Align.CENTER)
+        action_box.set_margin_top(10)
+        action_box.set_margin_bottom(16)
+
+        cancel_btn = Gtk.Button(label="Cancel")
+        cancel_btn.set_size_request(120, 36)
+        cancel_btn.connect("clicked", lambda w: self.hide_window())
+        action_box.pack_start(cancel_btn, False, False, 0)
+
+        apply_btn = Gtk.Button(label="Apply")
+        apply_btn.set_size_request(120, 36)
+        apply_btn.get_style_context().add_class("suggested-action")
+        apply_btn.connect("clicked", lambda w: self._apply_wallpapers())
+        action_box.pack_start(apply_btn, False, False, 0)
+
+        vbox.pack_start(action_box, False, False, 0)
+
+    # ------------------------------------------------------------------
+    # Monitor rows
+    # ------------------------------------------------------------------
 
     def _load_monitors(self):
         try:
@@ -130,73 +201,135 @@ class AppWindow(tk.Tk):
         except Exception as e:
             print(f"Error loading monitors: {e}")
             return
-        
+
         for monitor in monitors:
             m_name = monitor["name"]
-            row_frame = tk.Frame(self.monitors_frame, pady=5)
-            row_frame.pack(fill=tk.X)
-
-            disp_text = f"Display: {m_name}\n{monitor['resolution']}"
-            tk.Label(row_frame, text=disp_text, width=20, anchor="w", justify="left").pack(side=tk.LEFT)
-
             saved = self.saved_config.get(m_name, {})
             def_path = saved.get("image_path", "")
             def_style = saved.get("style", "stretch")
 
-            path_var = tk.StringVar(value=def_path)
+            # Outer frame for visual grouping
+            frame = Gtk.Frame()
+            frame.set_margin_bottom(4)
 
-            tk.Entry(row_frame, textvariable=path_var, width=30).pack(side=tk.LEFT, padx=5)
-            tk.Button(row_frame, text="Browse Image", command=lambda v=path_var: self._browse_image(v)).pack(side=tk.LEFT, padx=5)
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+            row.set_margin_start(8)
+            row.set_margin_end(8)
+            row.set_margin_top(6)
+            row.set_margin_bottom(6)
+            frame.add(row)
 
-            style_var = tk.StringVar(value=def_style)
-            ttk.Combobox(row_frame, textvariable=style_var, values=["stretch", "zoom", "center", "tile", "max"], state="readonly", width=10).pack(side=tk.LEFT, padx=5)
+            # Monitor label (name + resolution)
+            lbl = Gtk.Label()
+            lbl.set_markup(f"<b>{m_name}</b>\n{monitor['resolution']}")
+            lbl.set_xalign(0.0)
+            lbl.set_valign(Gtk.Align.CENTER)
+            lbl.set_width_chars(20)
+            row.pack_start(lbl, False, False, 0)
 
-            preview_frame = tk.Frame(row_frame, width=256, height=144, bg="lightgray", highlightbackground="gray", highlightcolor="gray", highlightthickness=1)
-            preview_frame.pack_propagate(False)
+            # Path entry
+            path_entry = Gtk.Entry()
+            path_entry.set_text(def_path)
+            path_entry.set_placeholder_text("Select image…")
+            path_entry.set_valign(Gtk.Align.CENTER)
+            row.pack_start(path_entry, True, True, 0)
 
-            preview_lbl = tk.Label(preview_frame, text="No Preview", bg="lightgray")
-            preview_lbl.pack(expand=True, fill=tk.BOTH)
+            # Browse button
+            browse_btn = Gtk.Button(label="Browse Image")
+            browse_btn.set_valign(Gtk.Align.CENTER)
+            browse_btn.connect("clicked", lambda _w, e=path_entry: self._browse_image(e))
+            row.pack_start(browse_btn, False, False, 0)
 
-            def clear_row(pv=path_var, lbl=preview_lbl):
-                pv.set("")
-                lbl.config(image="", text="No Preview")
-                lbl.image = None
+            # Style combobox
+            styles = ["stretch", "zoom", "center", "tile", "max"]
+            style_combo = Gtk.ComboBoxText()
+            style_combo.set_valign(Gtk.Align.CENTER)
+            for s in styles:
+                style_combo.append_text(s)
+            style_combo.set_active(styles.index(def_style) if def_style in styles else 0)
+            row.pack_start(style_combo, False, False, 0)
 
-            tk.Button(row_frame, text="Clear", command=clear_row).pack(side=tk.LEFT, padx=5)
-            preview_frame.pack(side=tk.LEFT, padx=10)
+            # Clear button
+            clear_btn = Gtk.Button(label="Clear")
+            clear_btn.set_valign(Gtk.Align.CENTER)
+            row.pack_start(clear_btn, False, False, 0)
 
-            self.monitor_rows[m_name] = {"path_var": path_var, "style_var": style_var, "preview_lbl": preview_lbl}
+            # Preview (fixed size box)
+            preview_frame = Gtk.Frame()
+            preview_frame.set_size_request(256, 144)
+            preview_image = Gtk.Image()
+            preview_image.set_size_request(256, 144)
+            preview_frame.add(preview_image)
+            row.pack_start(preview_frame, False, False, 0)
 
-            def update_preview(var=path_var, lbl=preview_lbl):
-                p = var.get()
-                if os.path.exists(p) and os.path.isfile(p):
+            # Wire up preview update
+            def _update_preview(entry, img):
+                p = entry.get_text()
+                if p and os.path.isfile(p):
                     try:
-                        img = Image.open(p)
-                        img.thumbnail((256, 144), Image.Resampling.LANCZOS)
-                        photo = ImageTk.PhotoImage(img)
-                        lbl.config(image=photo, text="")
-                        lbl.image = photo
+                        pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(p, 256, 144, True)
+                        img.set_from_pixbuf(pb)
                     except Exception:
-                        lbl.config(image="", text="Error")
+                        img.set_from_icon_name("image-missing", Gtk.IconSize.DIALOG)
                 else:
-                    lbl.config(image="", text="No Preview")
+                    img.clear()
 
-            path_var.trace_add("write", lambda *args, f=update_preview: f())
-            update_preview()
+            path_entry.connect("changed", lambda e, img=preview_image: _update_preview(e, img))
 
-    def _browse_image(self, path_var):
-        filepath = filedialog.askopenfilename(title="Select wallpaper", initialdir=self.last_directory, filetypes=[("Image files", "*.jpg *.jpeg *.png *.bmp *.gif"), ("All files", "*.*")])
-        if filepath:
-            path_var.set(filepath)
-            self.last_directory = os.path.dirname(filepath)
+            def _clear(_w, e=path_entry, img=preview_image):
+                e.set_text("")
+                img.clear()
+
+            clear_btn.connect("clicked", _clear)
+            _update_preview(path_entry, preview_image)
+
+            self.monitors_box.pack_start(frame, False, False, 0)
+            self.monitor_rows[m_name] = {
+                "path_entry": path_entry,
+                "style_combo": style_combo,
+                "styles": styles,
+            }
+
+    # ------------------------------------------------------------------
+    # Actions
+    # ------------------------------------------------------------------
+
+    def _browse_image(self, path_entry):
+        dialog = Gtk.FileChooserDialog(
+            title="Select wallpaper",
+            parent=self,
+            action=Gtk.FileChooserAction.OPEN,
+        )
+        dialog.add_buttons(
+            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+            Gtk.STOCK_OPEN, Gtk.ResponseType.OK,
+        )
+        dialog.set_current_folder(self.last_directory)
+
+        img_filter = Gtk.FileFilter()
+        img_filter.set_name("Image files")
+        for pat in ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif"]:
+            img_filter.add_pattern(pat)
+        dialog.add_filter(img_filter)
+
+        all_filter = Gtk.FileFilter()
+        all_filter.set_name("All files")
+        all_filter.add_pattern("*")
+        dialog.add_filter(all_filter)
+
+        if dialog.run() == Gtk.ResponseType.OK:
+            path_entry.set_text(dialog.get_filename())
+            self.last_directory = os.path.dirname(dialog.get_filename())
+        dialog.destroy()
 
     def _apply_wallpapers(self):
         configs = []
         config_to_save = {"_last_directory": self.last_directory}
-        
+
         for m_name, widgets in self.monitor_rows.items():
-            path = widgets["path_var"].get()
-            style = widgets["style_var"].get()
+            path = widgets["path_entry"].get_text()
+            idx = widgets["style_combo"].get_active()
+            style = widgets["styles"][idx] if 0 <= idx < len(widgets["styles"]) else "stretch"
             config_to_save[m_name] = {"image_path": path, "style": style}
             if path:
                 configs.append({"monitor": m_name, "image_path": path, "style": style})
@@ -212,35 +345,54 @@ class AppWindow(tk.Tk):
             except Exception as e:
                 print(f"Error applying wallpapers: {e}")
 
+    # ------------------------------------------------------------------
+    # Window management
+    # ------------------------------------------------------------------
+
+    def _on_delete(self, _window, _event):
+        self.hide_window()
+        return True  # Block destruction — just hide
+
     def hide_window(self):
-        self.withdraw()
+        self.hide()
 
     def show_window(self):
-        self.deiconify()
-        self.lift()
-        self.attributes('-topmost', 1)
-        self.attributes('-topmost', 0)
+        self.present()
+
+    # ------------------------------------------------------------------
+    # About dialog
+    # ------------------------------------------------------------------
 
     def _show_about(self):
-        win = tk.Toplevel(self)
-        win.title("About")
-        win.resizable(False, False)
-        win.grab_set()
+        dialog = Gtk.AboutDialog(transient_for=self, modal=True)
+        dialog.set_program_name(info.NAME)
+        dialog.set_version(info.VERSION)
+        dialog.set_comments(info.DESCRIPTION)
+        dialog.set_copyright(f"© 2026 {info.AUTHOR}")
+        dialog.set_license_type(Gtk.License.CUSTOM)
+        dialog.set_license(info.LICENSE_TEXT)
+        dialog.set_website(info.URL)
+        dialog.set_website_label(info.URL)
 
-        tk.Label(win, text=f"{info.NAME} ({info.VERSION})", font=("Helvetica", 13, "bold")).pack(padx=20, pady=(16, 4))
-        tk.Label(win, text=info.DESCRIPTION, wraplength=320, justify="center").pack(padx=20)
+        icon_path = os.path.join(os.path.dirname(__file__), "assets", "icon.png")
+        if os.path.exists(icon_path):
+            try:
+                pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(icon_path, 64, 64, True)
+                dialog.set_logo(pb)
+            except Exception:
+                pass
 
-        xwp_label = tk.Label(win, text=info.XWALLPAPER_URL, fg="blue", cursor="hand2", font=("Helvetica", 9, "underline"))
-        xwp_label.pack(padx=20)
-        xwp_label.bind("<Button-1>", lambda e: webbrowser.open(info.XWALLPAPER_URL))
+        dialog.run()
+        dialog.destroy()
 
-        tk.Label(win, text=f"Author: {info.AUTHOR}").pack(padx=20, pady=(8, 0))
-        url_label = tk.Label(win, text=info.URL, fg="blue", cursor="hand2", font=("Helvetica", 9, "underline"))
-        url_label.pack(padx=20)
-        url_label.bind("<Button-1>", lambda e: webbrowser.open(info.URL))
-        tk.Label(win, text=f"License: {info.LICENSE}").pack(padx=20, pady=(4, 0))
-        tk.Button(win, text="OK", width=8, command=win.destroy).pack(pady=12)
+    # ------------------------------------------------------------------
+    # Quit
+    # ------------------------------------------------------------------
 
     def quit_app(self):
-        self.destroy()
-
+        gtk_app = self.get_application()
+        if gtk_app:
+            gtk_app.release()   # balance the hold() from do_activate
+            gtk_app.quit()
+        else:
+            Gtk.main_quit()
