@@ -137,10 +137,18 @@ class AppWindow(Gtk.ApplicationWindow):
 
         prefs_item = Gtk.MenuItem(label="Preferences")
         prefs_menu = Gtk.Menu()
+
         self._autostart_item = Gtk.CheckMenuItem(label="Run on System Startup")
         self._autostart_item.set_active(is_autostart_enabled())
-        self._autostart_item.connect("toggled", lambda w: toggle_autostart(w.get_active()))
+        self._autostart_item.connect("toggled", self._on_autostart_toggled)
         prefs_menu.append(self._autostart_item)
+
+        self._apply_on_startup_item = Gtk.CheckMenuItem(label="Apply wallpapers on startup")
+        self._apply_on_startup_item.set_active(self.saved_config.get("_apply_on_startup", True))
+        self._apply_on_startup_item.set_sensitive(is_autostart_enabled())
+        self._apply_on_startup_item.connect("toggled", self._on_apply_on_startup_toggled)
+        prefs_menu.append(self._apply_on_startup_item)
+
         prefs_item.set_submenu(prefs_menu)
         menubar.append(prefs_item)
 
@@ -294,6 +302,17 @@ class AppWindow(Gtk.ApplicationWindow):
     # Actions
     # ------------------------------------------------------------------
 
+    def _on_autostart_toggled(self, widget):
+        enabled = widget.get_active()
+        toggle_autostart(enabled)
+        self._apply_on_startup_item.set_sensitive(enabled)
+
+    def _on_apply_on_startup_toggled(self, widget):
+        self.saved_config["_apply_on_startup"] = widget.get_active()
+        os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(self.saved_config, f, indent=4)
+
     def _browse_image(self, path_entry):
         dialog = Gtk.FileChooserDialog(
             title="Select wallpaper",
@@ -324,7 +343,10 @@ class AppWindow(Gtk.ApplicationWindow):
 
     def _apply_wallpapers(self):
         configs = []
-        config_to_save = {"_last_directory": self.last_directory}
+        config_to_save = {
+            "_last_directory": self.last_directory,
+            "_apply_on_startup": self._apply_on_startup_item.get_active(),
+        }
 
         for m_name, widgets in self.monitor_rows.items():
             path = widgets["path_entry"].get_text()

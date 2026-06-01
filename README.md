@@ -15,7 +15,7 @@ While changing wallpapers via the terminal is fast, it has its downsides. That i
 - **Live Preview**: See a thumbnail of your wallpaper before applying.
 - **System Tray Integration**: Runs quietly in the background using a pure GTK3 native tray icon.
 - **Persistence**: Remembers your wallpaper paths and settings between reboots.
-- **Autostart**: Built-in option to launch minimized to tray when your system starts.
+- **Autostart**: Built-in option to launch minimized to tray when your system starts, with a separate toggle to automatically apply your saved wallpapers on startup.
 - **Single Instance**: Prevents multiple windows; clicking the tray or launching again brings the existing window to focus.
 
 ## 🚀 Installation

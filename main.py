@@ -53,7 +53,8 @@ class XWallpaperApp(Gtk.Application):
 
             if self._startup_mode:
                 self._window.hide_window()
-                GLib.timeout_add(3000, lambda: apply_saved_wallpapers(self._window) or False)
+                if self._window.saved_config.get("_apply_on_startup", True):
+                    GLib.timeout_add(3000, lambda: apply_saved_wallpapers(self._window) or False)
             else:
                 self._window.show_window()
         else:
