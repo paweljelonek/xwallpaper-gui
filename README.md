@@ -22,21 +22,20 @@ While changing wallpapers via the terminal is fast, it has its downsides. That i
 
 ### 1. System Dependencies
 
-You need `xwallpaper` itself and the Python GObject introspection libraries for the GTK3 interface.
+You need `xwallpaper` itself and the Python GObject introspection libraries for the GTK3 interface. There are **no pip dependencies** — everything is provided by system packages.
 
 ```bash
 sudo apt update
-sudo apt install xwallpaper python3-gi python3-gi-cairo gir1.2-gtk-3.0
+sudo apt install xwallpaper python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0
 ```
 
-### 2. Python Environment
+### 2. Clone the repository
 
 ```bash
 git clone https://github.com/paweljelonek/xwallpaper-gui
 # or via SSH:
 git clone git@github.com:paweljelonek/xwallpaper-gui.git
 cd xwallpaper-gui
-pip install -r requirements.txt
 ```
 
 #### Virtual Environment
@@ -46,7 +45,6 @@ If you use a `venv` or `pyenv`, you must link the system `gi` package so Python 
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
 echo "/usr/lib/python3/dist-packages" > "$(python -c 'import site; print(site.getsitepackages()[0])')/system-gi.pth"
 ```
 
