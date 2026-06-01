@@ -35,7 +35,7 @@ def toggle_autostart(enable):
         ).format(exec_cmd)
         with open(DESKTOP_FILE, "w", encoding="utf-8") as f:
             f.write(content)
-        os.chmod(DESKTOP_FILE, 0o755)
+        os.chmod(DESKTOP_FILE, 0o644)
     else:
         if os.path.exists(DESKTOP_FILE):
             os.remove(DESKTOP_FILE)
@@ -359,6 +359,7 @@ class AppWindow(Gtk.ApplicationWindow):
         os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(config_to_save, f, indent=4)
+        self.saved_config = config_to_save
 
         if configs:
             try:

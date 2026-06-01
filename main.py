@@ -17,7 +17,7 @@ from tray import start_tray
 def apply_saved_wallpapers(app):
     configs = []
     for monitor_name, data in app.saved_config.items():
-        if monitor_name == "_last_directory":
+        if monitor_name.startswith("_"):
             continue
         image_path = data.get("image_path", "")
         if os.path.exists(image_path):
@@ -31,11 +31,11 @@ def apply_saved_wallpapers(app):
 
 
 class XWallpaperApp(Gtk.Application):
-    def __init__(self):
+    def __init__(self, startup_mode=False):
         super().__init__(application_id="org.xwallpaper.gui")
         self._window = None
         self._server = None
-        self._startup_mode = "--startup" in sys.argv
+        self._startup_mode = startup_mode
 
     def do_startup(self):
         Gtk.Application.do_startup(self)
@@ -62,9 +62,13 @@ class XWallpaperApp(Gtk.Application):
 
 
 def main():
-    app = XWallpaperApp()
+    startup_mode = "--startup" in sys.argv
+    # Filter out --startup so GTK does not fail on unrecognized option
+    cleaned_args = [arg for arg in sys.argv if arg != "--startup"]
+
+    app = XWallpaperApp(startup_mode=startup_mode)
     try:
-        app.run(sys.argv)
+        app.run(cleaned_args)
     except KeyboardInterrupt:
         sys.exit(0)
 
