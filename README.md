@@ -22,7 +22,7 @@ While changing wallpapers via the terminal is fast, it has its downsides. That i
 
 ### 1. System Dependencies
 
-You need `xwallpaper` itself and the Python GObject introspection libraries for the GTK3 interface. There are **no pip dependencies** — everything is provided by system packages.
+You need `xwallpaper` itself and the Python GObject introspection libraries for the GTK3 interface. There are **no pip dependencies** - everything is provided by system packages.
 
 ```bash
 sudo apt update
@@ -40,12 +40,33 @@ cd xwallpaper-gui
 
 #### Virtual Environment
 
-If you use a `venv` or `pyenv`, you must link the system `gi` package so Python can find the GTK3 libraries:
+A virtual environment is optional (there are no pip dependencies), but if you use one you must give it access to the system `gi` package so Python can find the GTK3 libraries. Pick whichever tool you prefer:
+
+**Option A - `venv`** (recommended)
 
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 echo "/usr/lib/python3/dist-packages" > "$(python -c 'import site; print(site.getsitepackages()[0])')/system-gi.pth"
+```
+
+**Option B - `pyenv`**
+
+```bash
+pyenv virtualenv 3.12 xwallpaper-gui
+pyenv local xwallpaper-gui
+echo "/usr/lib/python3/dist-packages" > "$(python -c 'import site; print(site.getsitepackages()[0])')/system-gi.pth"
+```
+
+**Option C - `uv`** (experimental)
+
+[`uv`](https://github.com/astral-sh/uv) is an extremely fast Python package and project manager written in Rust, developed by [Astral](https://astral.sh/). It's a drop-in replacement for `pip`, `venv`, `pyenv` and more. See the full documentation at https://docs.astral.sh/uv/.
+
+`uv` can pull in the system packages directly with `--system-site-packages`, so no `.pth` trick is needed:
+
+```bash
+uv venv --system-site-packages
+source .venv/bin/activate
 ```
 
 ## 🛠 Usage
